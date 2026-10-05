@@ -1,8 +1,14 @@
-const V = 'squeeze-v1';
-const FILES = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const V = 'squeeze-v2';
+const CORE = ['./', 'app.js', 'zip.js', 'gs-worker.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const OPTIONAL = ['vendor/gs.mjs', 'vendor/gs.wasm']; // cached at install if you vendored them
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(V).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil((async () => {
+    const c = await caches.open(V);
+    await c.addAll(CORE);
+    await Promise.all(OPTIONAL.map(u => c.add(u).catch(() => {})));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', e => {
@@ -14,8 +20,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  const r = e.request;
-  if (r.method !== 'GET' || new URL(r.url).origin !== location.origin) return;
+  const r = e.request, u = new URL(r.url);
+  if (r.method !== 'GET' || (u.origin !== location.origin && u.hostname !== 'cdn.jsdelivr.net')) return;
   const key = r.mode === 'navigate' ? './' : r;
   e.respondWith((async () => {
     const c = await caches.open(V);
