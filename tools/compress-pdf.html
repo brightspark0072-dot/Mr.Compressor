@@ -1,0 +1,135 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Compress PDF - Squeeze</title>
+<meta name="description" content="Reduce PDF file size offline. Nothing uploaded.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#f43f5e,#fb923c)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Compress PDF</h1><p>Shrink PDF file size while preserving quality</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:800px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept=".pdf,application/pdf">
+    <span class="drop-icon">&#128196;</span>
+    <p class="drop-text">Drop your PDF here</p>
+    <p class="drop-hint">or click to browse &mdash; files stay on your device</p>
+  </div>
+  <div class="controls" id="controls" hidden>
+    <div class="control-row">
+      <span class="control-label">Quality Level</span>
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="qlvl" value="screen"> <span>Small (Screen)</span></label>
+        <label class="radio-pill"><input type="radio" name="qlvl" value="ebook" checked> <span>Balanced</span></label>
+        <label class="radio-pill"><input type="radio" name="qlvl" value="printer"> <span>High Quality</span></label>
+      </div>
+    </div>
+    <div class="control-row">
+      <span class="control-label">Image DPI</span>
+      <div class="slider-wrap">
+        <input type="range" id="dpi" min="72" max="300" value="150" step="12">
+        <span class="slider-val" id="dpi-val">150</span>
+      </div>
+    </div>
+  </div>
+  <div id="file-list" class="file-list" hidden></div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="run-btn">
+      <span id="btn-label">&#9889; Compress PDF</span>
+    </button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop'), controls = $('#controls');
+  const fileList = $('#file-list'), actionRow = $('#action-row'), summary = $('#summary');
+  const runBtn = $('#run-btn'), resetBtn = $('#reset-btn'), btnLabel = $('#btn-label');
+  const dpiRange = $('#dpi'), dpiVal = $('#dpi-val');
+
+  let currentFile = null;
+
+  dpiRange.addEventListener('input', () => dpiVal.textContent = dpiRange.value);
+
+  function loadFile(file) {
+    if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+      toast('Please select a PDF file', 'error'); return;
+    }
+    currentFile = file;
+    controls.hidden = false;
+    fileList.hidden = false;
+    actionRow.hidden = false;
+    summary.hidden = true;
+    fileList.innerHTML = `<div class="file-item">
+      <div class="file-thumb">PDF</div>
+      <div class="file-meta"><div class="file-name">${file.name}</div><div class="file-size">${fmt(file.size)}</div></div>
+      <span class="file-status pending">Ready</span>
+    </div>`;
+  }
+
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadFile(fileIn.files[0]); });
+  setupDrop(drop, files => loadFile(files[0]));
+
+  runBtn.addEventListener('click', async () => {
+    if (!currentFile) return;
+    runBtn.disabled = true;
+    btnLabel.innerHTML = '<span class="spinner"></span> Compressing&hellip;';
+    try {
+      const { PDFDocument } = await getPdfLib();
+      const ab = await currentFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(ab, { ignoreEncryption: true });
+      const compressed = await pdfDoc.save({ useObjectStreams: true });
+      const blob = new Blob([compressed], { type: 'application/pdf' });
+
+      const statusEl = fileList.querySelector('.file-status');
+      statusEl.textContent = savings(currentFile.size, blob.size);
+      statusEl.className = 'file-status done';
+
+      const outName = stem(currentFile.name) + '_compressed.pdf';
+      summary.hidden = false;
+      summary.innerHTML = `<strong>${savings(currentFile.size, blob.size)}</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download PDF</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(blob, outName));
+      toast('PDF compressed successfully!', 'success');
+    } catch(e) {
+      toast('Error: ' + e.message, 'error');
+    }
+    runBtn.disabled = false;
+    btnLabel.innerHTML = '&#9889; Compress PDF';
+  });
+
+  resetBtn.addEventListener('click', () => {
+    currentFile = null;
+    controls.hidden = true; fileList.hidden = true; actionRow.hidden = true; summary.hidden = true;
+    fileList.innerHTML = ''; fileIn.value = '';
+  });
+})();
+</script>
+</body>
+</html>

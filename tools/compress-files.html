@@ -1,0 +1,127 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Compress to ZIP - Squeeze</title>
+<meta name="description" content="Archive any files to ZIP offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#f59e0b,#ea580c)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M21 8V21H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Compress to ZIP</h1><p>Archive any files into a ZIP package locally</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:800px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" multiple>
+    <span class="drop-icon">&#128230;</span>
+    <p class="drop-text">Drop any files here</p>
+    <p class="drop-hint">Any file type is supported</p>
+  </div>
+  <div id="controls" class="controls" hidden>
+    <div class="control-row">
+      <span class="control-label">Compression</span>
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="comp" value="DEFLATE" checked> <span>Compressed (DEFLATE)</span></label>
+        <label class="radio-pill"><input type="radio" name="comp" value="STORE"> <span>No Compression (STORE)</span></label>
+      </div>
+    </div>
+    <div class="control-row">
+      <span class="control-label">ZIP name</span>
+      <input type="text" id="zip-name" value="archive.zip" style="flex:1">
+    </div>
+  </div>
+  <div id="file-list" class="file-list" hidden></div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="run-btn">&#9889; Create ZIP</button>
+    <button class="btn-secondary" id="add-more">&#43; Add More</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop'), controls = $('#controls');
+  const fileList = $('#file-list'), actionRow = $('#action-row'), summary = $('#summary');
+  let files = [];
+
+  function addFiles(newFiles) { newFiles.forEach(f => files.push(f)); render(); }
+
+  function render() {
+    fileList.innerHTML = '';
+    if (!files.length) { controls.hidden = true; actionRow.hidden = true; fileList.hidden = true; return; }
+    controls.hidden = false; actionRow.hidden = false; fileList.hidden = false;
+    let total = 0;
+    files.forEach((f, i) => {
+      total += f.size;
+      const ext = f.name.split('.').pop().slice(0,4).toUpperCase();
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = `<div class="file-thumb">${ext}</div>
+        <div class="file-meta"><div class="file-name">${f.name}</div><div class="file-size">${fmt(f.size)}</div></div>
+        <button class="btn-secondary" onclick="removeFile(${i})" style="padding:4px 10px;font-size:.8rem">&#10005;</button>`;
+      fileList.appendChild(item);
+    });
+    if (files.length > 1) {
+      const tot = document.createElement('div');
+      tot.style.cssText = 'text-align:right;font-size:.85rem;color:var(--mu);padding:4px 0';
+      tot.textContent = files.length + ' files, ' + fmt(total) + ' total';
+      fileList.appendChild(tot);
+    }
+  }
+
+  window.removeFile = (i) => { files.splice(i, 1); render(); };
+
+  $('#run-btn').addEventListener('click', async () => {
+    if (!files.length) return;
+    const comp = document.querySelector('input[name=comp]:checked').value;
+    const zipName = $('#zip-name').value || 'archive.zip';
+    $('#run-btn').disabled = true; $('#run-btn').innerHTML = '<span class="spinner"></span> Zipping...';
+    try {
+      const JSZip = await getJsZip();
+      const zip = new JSZip();
+      for (const f of files) {
+        const ab = await f.arrayBuffer();
+        zip.file(f.name, ab, { compression: comp });
+      }
+      const blob = await zip.generateAsync({ type: 'blob', compression: comp, compressionOptions: { level: comp === 'DEFLATE' ? 9 : 0 } });
+      const origTotal = files.reduce((a,f) => a + f.size, 0);
+      summary.hidden = false;
+      summary.innerHTML = `<strong>${files.length} files archived: ${savings(origTotal, blob.size)}</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download ZIP</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(blob, zipName));
+      toast('ZIP created!', 'success');
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+    $('#run-btn').disabled = false; $('#run-btn').innerHTML = '&#9889; Create ZIP';
+  });
+
+  fileIn.addEventListener('change', () => addFiles([...fileIn.files]));
+  setupDrop(drop, fs => addFiles(fs), true);
+  $('#add-more').addEventListener('click', () => fileIn.click());
+  $('#reset-btn').addEventListener('click', () => { files = []; render(); summary.hidden = true; fileIn.value = ''; });
+})();
+</script>
+</body>
+</html>

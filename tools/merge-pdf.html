@@ -1,0 +1,135 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Merge PDF - Squeeze</title>
+<meta name="description" content="Combine multiple PDFs into one offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+.file-item { cursor: grab; user-select: none; }
+.file-item.dragging { opacity: 0.4; border: 2px dashed var(--ac); }
+.file-item.drag-over { border-color: var(--ac2); background: rgba(167,139,250,0.08); }
+.drag-handle { cursor: grab; color: var(--mu); padding: 0 6px; font-size: 1.1rem; }
+.page-count { font-size: 0.78rem; color: var(--mu); }
+</style>
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#8b5cf6,#ec4899)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><rect x="2" y="7" width="7" height="14" rx="2"/><rect x="15" y="7" width="7" height="14" rx="2"/><path d="M9 14h6M9 10h6"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Merge PDF</h1><p>Combine multiple PDFs into one document &mdash; drag to reorder</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:800px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept=".pdf,application/pdf" multiple>
+    <span class="drop-icon">&#128196;</span>
+    <p class="drop-text">Drop PDFs here (multiple allowed)</p>
+    <p class="drop-hint">Drag &amp; drop to reorder after adding</p>
+  </div>
+  <div id="file-list" class="file-list" style="margin-top:16px"></div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="run-btn">&#9889; Merge PDFs</button>
+    <button class="btn-secondary" id="add-more">&#43; Add More</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop');
+  const fileList = $('#file-list'), actionRow = $('#action-row'), summary = $('#summary');
+  const runBtn = $('#run-btn'), resetBtn = $('#reset-btn');
+  let files = [];
+
+  function addFiles(newFiles) {
+    newFiles.filter(f => f.name.toLowerCase().endsWith('.pdf')).forEach(f => files.push(f));
+    render();
+  }
+
+  function render() {
+    fileList.innerHTML = '';
+    if (!files.length) { actionRow.hidden = true; return; }
+    actionRow.hidden = false;
+    files.forEach((f, i) => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.draggable = true;
+      item.dataset.idx = i;
+      item.innerHTML = `
+        <span class="drag-handle">&#9776;</span>
+        <div class="file-thumb">PDF</div>
+        <div class="file-meta">
+          <div class="file-name">${f.name}</div>
+          <div class="file-size">${fmt(f.size)}</div>
+        </div>
+        <button class="btn-secondary" onclick="removeFile(${i})" style="padding:4px 10px;font-size:0.8rem">&#10005;</button>`;
+      item.addEventListener('dragstart', () => { item.classList.add('dragging'); item._dragIdx = i; });
+      item.addEventListener('dragend', () => item.classList.remove('dragging'));
+      item.addEventListener('dragover', e => { e.preventDefault(); item.classList.add('drag-over'); });
+      item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+      item.addEventListener('drop', e => {
+        e.preventDefault(); item.classList.remove('drag-over');
+        const from = parseInt(document.querySelector('.dragging')?.dataset.idx ?? -1);
+        const to = i;
+        if (from >= 0 && from !== to) { const moved = files.splice(from, 1)[0]; files.splice(to, 0, moved); render(); }
+      });
+      fileList.appendChild(item);
+    });
+  }
+
+  window.removeFile = (i) => { files.splice(i, 1); render(); };
+
+  fileIn.addEventListener('change', () => addFiles([...fileIn.files]));
+  setupDrop(drop, fs => addFiles(fs), true);
+  $('#add-more').addEventListener('click', () => fileIn.click());
+  fileIn.addEventListener('change', () => addFiles([...fileIn.files]));
+
+  runBtn.addEventListener('click', async () => {
+    if (files.length < 2) { toast('Add at least 2 PDFs to merge', 'error'); return; }
+    runBtn.disabled = true; runBtn.innerHTML = '<span class="spinner"></span> Merging&hellip;';
+    try {
+      const { PDFDocument } = await getPdfLib();
+      const merged = await PDFDocument.create();
+      for (const f of files) {
+        const ab = await f.arrayBuffer();
+        const doc = await PDFDocument.load(ab, { ignoreEncryption: true });
+        const pages = await merged.copyPages(doc, doc.getPageIndices());
+        pages.forEach(p => merged.addPage(p));
+      }
+      const bytes = await merged.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      summary.hidden = false;
+      summary.innerHTML = `<strong>${files.length} PDFs merged &rarr; ${fmt(blob.size)}</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download merged.pdf</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(blob, 'merged.pdf'));
+      toast('PDFs merged!', 'success');
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+    runBtn.disabled = false; runBtn.innerHTML = '&#9889; Merge PDFs';
+  });
+
+  resetBtn.addEventListener('click', () => { files = []; render(); summary.hidden = true; fileIn.value = ''; });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Resize Images - Squeeze</title>
+<meta name="description" content="Resize images offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#14b8a6,#3b82f6)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Resize Images</h1><p>Set exact dimensions or scale by percentage</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:800px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept="image/*" multiple>
+    <span class="drop-icon">&#128444;</span>
+    <p class="drop-text">Drop images here</p>
+    <p class="drop-hint">Resize to exact pixel dimensions or a percentage</p>
+  </div>
+  <div id="controls" class="controls" hidden>
+    <div class="control-row">
+      <span class="control-label">Mode</span>
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="mode" value="pct" checked> <span>Percentage</span></label>
+        <label class="radio-pill"><input type="radio" name="mode" value="px"> <span>Exact Pixels</span></label>
+        <label class="radio-pill"><input type="radio" name="mode" value="maxpx"> <span>Max Dimension</span></label>
+      </div>
+    </div>
+    <div id="pct-ctrl" class="control-row">
+      <span class="control-label">Scale</span>
+      <div class="slider-wrap">
+        <input type="range" id="pct" min="10" max="200" value="50">
+        <span class="slider-val" id="pct-val">50%</span>
+      </div>
+    </div>
+    <div id="px-ctrl" class="control-row" hidden>
+      <span class="control-label">Width</span>
+      <input type="number" id="px-w" value="800" min="1" max="10000" style="width:100px">
+      <span style="color:var(--mu)">x</span>
+      <input type="number" id="px-h" value="600" min="1" max="10000" style="width:100px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;cursor:pointer;color:var(--mu)"><input type="checkbox" id="lock-ar" checked> Lock ratio</label>
+    </div>
+    <div id="maxpx-ctrl" class="control-row" hidden>
+      <span class="control-label">Max Side</span>
+      <input type="number" id="max-px" value="1920" min="1" max="10000" style="width:120px">
+      <span style="font-size:.85rem;color:var(--mu)">px</span>
+    </div>
+    <div class="control-row">
+      <span class="control-label">Format</span>
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="fmt" value="same" checked> <span>Keep Original</span></label>
+        <label class="radio-pill"><input type="radio" name="fmt" value="image/jpeg"> <span>JPG</span></label>
+        <label class="radio-pill"><input type="radio" name="fmt" value="image/png"> <span>PNG</span></label>
+        <label class="radio-pill"><input type="radio" name="fmt" value="image/webp"> <span>WebP</span></label>
+      </div>
+    </div>
+  </div>
+  <div id="file-list" class="file-list" hidden></div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="run-btn">&#9889; Resize All</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop'), controls = $('#controls');
+  const fileList = $('#file-list'), actionRow = $('#action-row'), summary = $('#summary');
+  const pct = $('#pct'), pctVal = $('#pct-val');
+  let images = [], results = [];
+
+  pct.addEventListener('input', () => pctVal.textContent = pct.value + '%');
+
+  document.querySelectorAll('input[name=mode]').forEach(r => {
+    r.addEventListener('change', () => {
+      $('#pct-ctrl').hidden = r.value !== 'pct';
+      $('#px-ctrl').hidden = r.value !== 'px';
+      $('#maxpx-ctrl').hidden = r.value !== 'maxpx';
+    });
+  });
+
+  function addImages(newFiles) {
+    newFiles.filter(f => f.type.startsWith('image/')).forEach(f => images.push(f));
+    render();
+  }
+
+  function render() {
+    fileList.innerHTML = '';
+    if (!images.length) { controls.hidden = true; actionRow.hidden = true; fileList.hidden = true; return; }
+    controls.hidden = false; actionRow.hidden = false; fileList.hidden = false;
+    images.forEach((f, i) => {
+      const url = URL.createObjectURL(f);
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.innerHTML = `<div class="file-thumb"><img src="${url}" alt="${f.name}"></div>
+        <div class="file-meta"><div class="file-name">${f.name}</div><div class="file-size">${fmt(f.size)}</div></div>
+        <span class="file-status pending" id="st-${i}">Ready</span>
+        <div class="file-action" id="act-${i}" hidden></div>`;
+      fileList.appendChild(item);
+    });
+  }
+
+  $('#run-btn').addEventListener('click', async () => {
+    if (!images.length) return;
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    const fmtSel = document.querySelector('input[name=fmt]:checked').value;
+    $('#run-btn').disabled = true; $('#run-btn').innerHTML = '<span class="spinner"></span> Resizing...';
+    results = [];
+    for (let i = 0; i < images.length; i++) {
+      const f = images[i];
+      const st = $('#st-' + i), act = $('#act-' + i);
+      st.textContent = 'Resizing...'; st.className = 'file-status working';
+      try {
+        const bmp = await createImageBitmap(f);
+        const ow = bmp.width, oh = bmp.height;
+        let nw, nh;
+        if (mode === 'pct') { const s = parseInt(pct.value)/100; nw = Math.round(ow*s); nh = Math.round(oh*s); }
+        else if (mode === 'px') {
+          nw = parseInt($('#px-w').value); nh = parseInt($('#px-h').value);
+          if ($('#lock-ar').checked) nh = Math.round(oh/ow*nw);
+        } else {
+          const mp = parseInt($('#max-px').value);
+          const k = Math.min(1, mp/Math.max(ow,oh));
+          nw = Math.round(ow*k); nh = Math.round(oh*k);
+        }
+        const c = document.createElement('canvas'); c.width = nw; c.height = nh;
+        c.getContext('2d').drawImage(bmp, 0, 0, nw, nh); bmp.close?.();
+        let outFmt = fmtSel === 'same' ? (f.type || 'image/jpeg') : fmtSel;
+        if (!['image/jpeg','image/png','image/webp'].includes(outFmt)) outFmt = 'image/jpeg';
+        const blob = await new Promise(r => c.toBlob(r, outFmt, 0.9));
+        const ext = outFmt === 'image/jpeg' ? 'jpg' : outFmt === 'image/png' ? 'png' : 'webp';
+        const outName = stem(f.name) + '_' + nw + 'x' + nh + '.' + ext;
+        results.push({ blob, name: outName });
+        st.textContent = ow + 'x' + oh + ' \u2192 ' + nw + 'x' + nh; st.className = 'file-status done';
+        act.hidden = false;
+        const btn = document.createElement('button'); btn.textContent = 'Save';
+        btn.addEventListener('click', () => download(blob, outName)); act.appendChild(btn);
+      } catch(e) { st.textContent = 'Error'; st.className = 'file-status error'; }
+    }
+    summary.hidden = false;
+    summary.innerHTML = `<strong>${results.length} images resized</strong><br>
+      <div class="action-row"><button class="btn-primary" id="dl-all">&#8659; Download All as ZIP</button></div>`;
+    $('#dl-all').addEventListener('click', async () => {
+      const JSZip = await getJsZip();
+      const zip = new JSZip();
+      for (const r of results) zip.file(r.name, r.blob);
+      download(await zip.generateAsync({ type: 'blob' }), 'resized_images.zip');
+    });
+    toast('All resized!', 'success');
+    $('#run-btn').disabled = false; $('#run-btn').innerHTML = '&#9889; Resize All';
+  });
+
+  fileIn.addEventListener('change', () => addImages([...fileIn.files]));
+  setupDrop(drop, fs => addImages(fs), true);
+  $('#reset-btn').addEventListener('click', () => { images = []; results = []; render(); summary.hidden = true; fileIn.value = ''; });
+})();
+</script>
+</body>
+</html>

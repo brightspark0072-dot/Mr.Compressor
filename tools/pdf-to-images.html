@@ -1,0 +1,153 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PDF to Images - Squeeze</title>
+<meta name="description" content="Export PDF pages as images offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>PDF to Images</h1><p>Export each PDF page as a JPG or PNG image</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:800px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept=".pdf,application/pdf">
+    <span class="drop-icon">&#128196;</span>
+    <p class="drop-text">Drop your PDF here</p>
+    <p class="drop-hint">Each page will be exported as a separate image</p>
+  </div>
+  <div id="controls" class="controls" hidden>
+    <div class="control-row">
+      <span class="control-label">Format</span>
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="fmt" value="image/jpeg" checked> <span>JPG</span></label>
+        <label class="radio-pill"><input type="radio" name="fmt" value="image/png"> <span>PNG</span></label>
+        <label class="radio-pill"><input type="radio" name="fmt" value="image/webp"> <span>WebP</span></label>
+      </div>
+    </div>
+    <div class="control-row">
+      <span class="control-label">Quality</span>
+      <div class="slider-wrap">
+        <input type="range" id="quality" min="50" max="100" value="90">
+        <span class="slider-val" id="q-val">90</span>
+      </div>
+    </div>
+    <div class="control-row">
+      <span class="control-label">Scale</span>
+      <div class="slider-wrap">
+        <input type="range" id="scale" min="1" max="4" step="0.5" value="2">
+        <span class="slider-val" id="s-val">2x</span>
+      </div>
+    </div>
+  </div>
+  <div id="preview-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin-top:16px"></div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="run-btn">&#9889; Convert All Pages</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop'), controls = $('#controls');
+  const previewGrid = $('#preview-grid'), actionRow = $('#action-row'), summary = $('#summary');
+  const quality = $('#quality'), qVal = $('#q-val'), scale = $('#scale'), sVal = $('#s-val');
+  let pdfJsDoc = null, totalPages = 0;
+
+  quality.addEventListener('input', () => qVal.textContent = quality.value);
+  scale.addEventListener('input', () => sVal.textContent = scale.value + 'x');
+
+  async function loadPdf(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) { toast('Please select a PDF', 'error'); return; }
+    toast('Loading PDF...', 'info');
+    try {
+      const ab = await file.arrayBuffer();
+      const pdfjsLib = await getPdfJs();
+      pdfJsDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+      totalPages = pdfJsDoc.numPages;
+      controls.hidden = false; actionRow.hidden = false;
+      previewGrid.innerHTML = '';
+      for (let i = 1; i <= Math.min(totalPages, 6); i++) {
+        const c = await renderPage(pdfJsDoc, i, 0.25);
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'border:1px solid var(--gb);border-radius:8px;overflow:hidden;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.04)';
+        c.style.cssText = 'max-width:100%;max-height:100%';
+        wrap.appendChild(c);
+        const lbl = document.createElement('div');
+        lbl.style.cssText = 'text-align:center;font-size:.72rem;color:var(--mu);padding:3px';
+        lbl.textContent = 'Page ' + i;
+        const outer = document.createElement('div');
+        outer.appendChild(wrap); outer.appendChild(lbl);
+        previewGrid.appendChild(outer);
+      }
+      if (totalPages > 6) {
+        const more = document.createElement('div');
+        more.style.cssText = 'display:flex;align-items:center;justify-content:center;font-size:.85rem;color:var(--mu)';
+        more.textContent = '+' + (totalPages - 6) + ' more pages';
+        previewGrid.appendChild(more);
+      }
+      toast(totalPages + ' pages loaded', 'success');
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  $('#run-btn').addEventListener('click', async () => {
+    if (!pdfJsDoc) return;
+    const fmt = document.querySelector('input[name=fmt]:checked').value;
+    const ext = fmt === 'image/jpeg' ? 'jpg' : fmt === 'image/png' ? 'png' : 'webp';
+    const q = parseInt(quality.value) / 100;
+    const sc = parseFloat(scale.value);
+    $('#run-btn').disabled = true; $('#run-btn').innerHTML = '<span class="spinner"></span> Converting...';
+    try {
+      const JSZip = await getJsZip();
+      const zip = new JSZip();
+      for (let i = 1; i <= totalPages; i++) {
+        const canvas = await renderPage(pdfJsDoc, i, sc);
+        const blob = await new Promise(r => canvas.toBlob(r, fmt, q));
+        const ab = await blob.arrayBuffer();
+        zip.file('page_' + String(i).padStart(3,'0') + '.' + ext, ab);
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      summary.hidden = false;
+      summary.innerHTML = `<strong>${totalPages} pages converted to ${ext.toUpperCase()} &rarr; ${fmt(zipBlob.size)}</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download ZIP</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(zipBlob, 'pdf_images.zip'));
+      toast('All pages exported!', 'success');
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+    $('#run-btn').disabled = false; $('#run-btn').innerHTML = '&#9889; Convert All Pages';
+  });
+
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadPdf(fileIn.files[0]); });
+  setupDrop(drop, files => loadPdf(files[0]));
+  $('#reset-btn').addEventListener('click', () => {
+    pdfJsDoc = null; totalPages = 0;
+    controls.hidden = true; actionRow.hidden = true; summary.hidden = true;
+    previewGrid.innerHTML = ''; fileIn.value = '';
+  });
+})();
+</script>
+</body>
+</html>

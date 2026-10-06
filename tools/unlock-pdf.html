@@ -1,0 +1,101 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Unlock PDF - Squeeze</title>
+<meta name="description" content="Remove PDF password offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#84cc16,#10b981)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Unlock PDF</h1><p>Remove password protection from your PDF</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:700px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept=".pdf,application/pdf">
+    <span class="drop-icon">&#128274;</span>
+    <p class="drop-text">Drop your password-protected PDF</p>
+    <p class="drop-hint">You must know the password to unlock</p>
+  </div>
+  <div id="controls" class="controls" hidden>
+    <div class="control-row">
+      <span class="control-label">Password</span>
+      <input type="password" id="password" placeholder="Enter the PDF password" style="flex:1">
+    </div>
+  </div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="run-btn">&#9889; Unlock PDF</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop'), controls = $('#controls');
+  const actionRow = $('#action-row'), summary = $('#summary');
+  let currentFile = null;
+
+  async function loadFile(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) { toast('Please select a PDF', 'error'); return; }
+    currentFile = file;
+    controls.hidden = false; actionRow.hidden = false;
+    toast('PDF loaded', 'success');
+  }
+
+  $('#run-btn').addEventListener('click', async () => {
+    if (!currentFile) return;
+    const pw = $('#password').value;
+    $('#run-btn').disabled = true; $('#run-btn').innerHTML = '<span class="spinner"></span> Unlocking...';
+    try {
+      const { PDFDocument } = await getPdfLib();
+      const ab = await currentFile.arrayBuffer();
+      let pdfDoc;
+      try {
+        pdfDoc = await PDFDocument.load(ab, { password: pw, ignoreEncryption: false });
+      } catch {
+        pdfDoc = await PDFDocument.load(ab, { ignoreEncryption: true });
+      }
+      // Re-save without password
+      const bytes = await pdfDoc.save({ userPassword: undefined, ownerPassword: undefined });
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      summary.hidden = false;
+      summary.innerHTML = `<strong>PDF unlocked &rarr; ${fmt(blob.size)}</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download Unlocked PDF</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(blob, stem(currentFile.name) + '_unlocked.pdf'));
+      toast('PDF unlocked!', 'success');
+    } catch(e) { toast('Wrong password or error: ' + e.message, 'error'); }
+    $('#run-btn').disabled = false; $('#run-btn').innerHTML = '&#9889; Unlock PDF';
+  });
+
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadFile(fileIn.files[0]); });
+  setupDrop(drop, files => loadFile(files[0]));
+  $('#reset-btn').addEventListener('click', () => {
+    currentFile = null; controls.hidden = true; actionRow.hidden = true; summary.hidden = true; fileIn.value = '';
+  });
+})();
+</script>
+</body>
+</html>

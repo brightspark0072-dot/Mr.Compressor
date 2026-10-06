@@ -1,0 +1,184 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Split PDF - Squeeze</title>
+<meta name="description" content="Split PDF into individual pages offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+.page-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:12px; margin-top:16px; }
+.page-thumb { border:2px solid var(--gb); border-radius:10px; overflow:hidden; position:relative; cursor:pointer; aspect-ratio:3/4; background:rgba(255,255,255,0.04); display:flex; flex-direction:column; align-items:center; justify-content:center; transition:border-color .15s; }
+.page-thumb.selected { border-color:var(--ac); }
+.page-thumb canvas { max-width:100%; max-height:80%; }
+.page-num { position:absolute; bottom:4px; left:0; right:0; text-align:center; font-size:.72rem; font-weight:700; color:var(--mu); }
+.page-thumb.selected .page-num { color:var(--ac); }
+.check-icon { position:absolute; top:4px; right:4px; width:18px; height:18px; background:var(--ac); border-radius:50%; display:none; align-items:center; justify-content:center; font-size:.7rem; color:#080c1e; font-weight:700; }
+.page-thumb.selected .check-icon { display:flex; }
+</style>
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#06b6d4,#3b82f6)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M16 3h5v5M4 20 20.5 3.5M21 16v5h-5M15 15l5.5 5.5M4 4l5 5"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Split PDF</h1><p>Select pages to extract or split all pages into individual PDFs</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:900px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept=".pdf,application/pdf">
+    <span class="drop-icon">&#128196;</span>
+    <p class="drop-text">Drop your PDF here</p>
+    <p class="drop-hint">Click pages to select which ones to extract</p>
+  </div>
+  <div id="page-section" hidden>
+    <div class="control-row" style="margin-top:16px">
+      <button class="btn-secondary" id="sel-all">Select All</button>
+      <button class="btn-secondary" id="sel-none">Deselect All</button>
+      <span style="color:var(--mu);font-size:.9rem" id="sel-info">0 pages selected</span>
+    </div>
+    <div class="page-grid" id="page-grid"></div>
+  </div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="extract-btn">&#9889; Extract Selected Pages</button>
+    <button class="btn-primary" id="split-all-btn" style="background:linear-gradient(135deg,#06b6d4,#3b82f6)">&#128196; Split All Pages</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop');
+  const pageSection = $('#page-section'), pageGrid = $('#page-grid');
+  const actionRow = $('#action-row'), summary = $('#summary');
+  const selInfo = $('#sel-info');
+
+  let pdfDoc = null, pdfJsDoc = null, totalPages = 0, selected = new Set();
+
+  async function loadPdf(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) { toast('Please select a PDF', 'error'); return; }
+    toast('Loading PDF...', 'info');
+    try {
+      const ab = await file.arrayBuffer();
+      const { PDFDocument } = await getPdfLib();
+      pdfDoc = await PDFDocument.load(ab, { ignoreEncryption: true });
+      totalPages = pdfDoc.getPageCount();
+
+      const pdfjsLib = await getPdfJs();
+      pdfJsDoc = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+
+      selected = new Set([...Array(totalPages).keys()]);
+      await renderPages();
+      pageSection.hidden = false; actionRow.hidden = false;
+      updateInfo();
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  async function renderPages() {
+    pageGrid.innerHTML = '';
+    for (let i = 0; i < totalPages; i++) {
+      const thumb = document.createElement('div');
+      thumb.className = 'page-thumb selected';
+      thumb.dataset.page = i;
+      thumb.innerHTML = `<span class="check-icon">&#10003;</span><div style="font-size:.7rem;color:var(--mu);margin-top:8px">Loading...</div><div class="page-num">Page ${i+1}</div>`;
+      thumb.addEventListener('click', () => {
+        if (selected.has(i)) selected.delete(i); else selected.add(i);
+        thumb.classList.toggle('selected', selected.has(i));
+        updateInfo();
+      });
+      pageGrid.appendChild(thumb);
+
+      // Render thumbnail async
+      (async (idx, el) => {
+        try {
+          const canvas = await renderPage(pdfJsDoc, idx + 1, 0.3);
+          el.innerHTML = `<span class="check-icon">&#10003;</span><div class="page-num">Page ${idx+1}</div>`;
+          el.insertBefore(canvas, el.lastChild);
+        } catch {}
+      })(i, thumb);
+    }
+  }
+
+  function updateInfo() {
+    selInfo.textContent = selected.size + ' of ' + totalPages + ' pages selected';
+  }
+
+  $('#sel-all').addEventListener('click', () => {
+    for (let i = 0; i < totalPages; i++) selected.add(i);
+    $$('.page-thumb').forEach(t => t.classList.add('selected')); updateInfo();
+  });
+  $('#sel-none').addEventListener('click', () => {
+    selected.clear();
+    $$('.page-thumb').forEach(t => t.classList.remove('selected')); updateInfo();
+  });
+
+  $('#extract-btn').addEventListener('click', async () => {
+    if (!selected.size) { toast('Select at least one page', 'error'); return; }
+    try {
+      const { PDFDocument } = await getPdfLib();
+      const newDoc = await PDFDocument.create();
+      const indices = [...selected].sort((a,b) => a-b);
+      const pages = await newDoc.copyPages(pdfDoc, indices);
+      pages.forEach(p => newDoc.addPage(p));
+      const bytes = await newDoc.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      summary.hidden = false;
+      summary.innerHTML = `<strong>${selected.size} pages extracted &rarr; ${fmt(blob.size)}</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download PDF</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(blob, 'extracted_pages.pdf'));
+      toast('Pages extracted!', 'success');
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+  });
+
+  $('#split-all-btn').addEventListener('click', async () => {
+    if (!pdfDoc) return;
+    try {
+      const { PDFDocument } = await getPdfLib();
+      const JSZip = await getJsZip();
+      const zip = new JSZip();
+      for (let i = 0; i < totalPages; i++) {
+        const newDoc = await PDFDocument.create();
+        const [page] = await newDoc.copyPages(pdfDoc, [i]);
+        newDoc.addPage(page);
+        const bytes = await newDoc.save();
+        zip.file('page_' + String(i+1).padStart(3,'0') + '.pdf', bytes);
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      summary.hidden = false;
+      summary.innerHTML = `<strong>${totalPages} pages split into ZIP</strong><br>
+        <div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download ZIP</button></div>`;
+      $('#dl-btn').addEventListener('click', () => download(zipBlob, 'split_pages.zip'));
+      toast('All pages split!', 'success');
+    } catch(e) { toast('Error: ' + e.message, 'error'); }
+  });
+
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadPdf(fileIn.files[0]); });
+  setupDrop(drop, files => loadPdf(files[0]));
+  $('#reset-btn').addEventListener('click', () => {
+    pdfDoc = null; pdfJsDoc = null; totalPages = 0; selected.clear();
+    pageSection.hidden = true; actionRow.hidden = true; summary.hidden = true;
+    pageGrid.innerHTML = ''; fileIn.value = '';
+  });
+})();
+</script>
+</body>
+</html>

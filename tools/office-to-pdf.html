@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Document / Text to PDF - Squeeze</title>
+<meta name="description" content="Convert text files, documents, and code files to PDF completely offline in your browser.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+.editor-wrap { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.doc-textarea { width: 100%; min-height: 250px; background: rgba(0,0,0,0.3); border: 1px solid var(--b); border-radius: 12px; padding: 16px; color: var(--fg); font-family: 'Outfit', system-ui, sans-serif; font-size: 1rem; line-height: 1.6; resize: vertical; outline: none; }
+.doc-textarea:focus { border-color: var(--p); }
+</style>
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <div class="header-badge"><span class="badge-dot"></span><span>100% Offline</span></div>
+  </div>
+</header>
+<main class="tool-main">
+  <div class="tool-header">
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <h1>Document / Text to PDF</h1>
+    <p>Convert text, markdown, code, and HTML documents into professional PDF files completely offline.</p>
+  </div>
+
+  <div class="drop-zone" id="drop-zone">
+    <div class="drop-icon">&#128221;</div>
+    <div class="drop-title">Select Text File or Type Below</div>
+    <div class="drop-sub">Drag &amp; drop .txt, .md, .csv, .html files or paste text</div>
+    <input type="file" id="file-input" accept=".txt,.md,.csv,.html,.js,.py,.json,.xml" style="display:none">
+  </div>
+
+  <div class="editor-wrap" style="margin-top:24px">
+    <label style="font-weight:600;font-size:0.95rem;color:var(--mu)">Document Content Editor:</label>
+    <textarea class="doc-textarea" id="doc-text" placeholder="Type or paste your text document content here..."></textarea>
+  </div>
+
+  <div class="options-panel">
+    <h3>Document Formatting Options</h3>
+    <div class="opt-grid">
+      <div class="opt-group">
+        <label>Document Title</label>
+        <input type="text" id="doc-title" class="opt-input" placeholder="Document Title (Header)">
+      </div>
+      <div class="opt-group">
+        <label>Paper Size</label>
+        <select id="paper-size" class="opt-select">
+          <option value="a4">A4 (210 x 297 mm)</option>
+          <option value="letter">US Letter (8.5 x 11 in)</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Font Size</label>
+        <select id="font-size" class="opt-select">
+          <option value="12">12 pt (Standard)</option>
+          <option value="14">14 pt (Medium)</option>
+          <option value="16">16 pt (Large)</option>
+          <option value="10">10 pt (Small)</option>
+        </select>
+      </div>
+      <div class="opt-group">
+        <label>Page Margins</label>
+        <select id="margin-size" class="opt-select">
+          <option value="40">Normal (40px)</option>
+          <option value="60">Wide (60px)</option>
+          <option value="20">Compact (20px)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions-row" style="margin-top:24px">
+    <button id="btn-convert" class="btn-primary">&#9889; Convert to PDF</button>
+    <button id="btn-clear" class="btn-sec">Clear Content</button>
+  </div>
+</main>
+
+<script src="_shared.js"></script>
+<script>
+const dropZone = $('#drop-zone');
+const fileInput = $('#file-input');
+const docText = $('#doc-text');
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files.length) loadTextFile(e.target.files[0]); });
+setupDrop(dropZone, files => loadTextFile(files[0]), false, '.txt,.md,.csv,.html,.js,.py,.json,.xml');
+
+function loadTextFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    docText.value = e.target.result;
+    if (!$('#doc-title').value) $('#doc-title').value = stem(file.name);
+    toast('Text file loaded!', 'success');
+  };
+  reader.readAsText(file);
+}
+
+$('#btn-clear').addEventListener('click', () => {
+  docText.value = '';
+  $('#doc-title').value = '';
+  fileInput.value = '';
+});
+
+$('#btn-convert').addEventListener('click', async () => {
+  const text = docText.value.trim();
+  if (!text) {
+    toast('Please enter or load some text content first.', 'error');
+    return;
+  }
+
+  const title = $('#doc-title').value.trim() || 'Document';
+  const fontSize = parseInt($('#font-size').value, 10);
+  const margin = parseInt($('#margin-size').value, 10);
+  const isA4 = $('#paper-size').value === 'a4';
+  
+  // A4 dimensions in pt: 595.28 x 841.89 | Letter: 612 x 792
+  const pdfWidth = isA4 ? 595 : 612;
+  const pdfHeight = isA4 ? 842 : 792;
+  
+  const btn = $('#btn-convert');
+  btn.disabled = true;
+  btn.textContent = 'Generating PDF...';
+
+  try {
+    const pdfLib = await getPdfLib();
+    const pdfDoc = await pdfLib.PDFDocument.create();
+    const font = await pdfDoc.embedFont(pdfLib.StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(pdfLib.StandardFonts.HelveticaBold);
+    
+    const contentWidth = pdfWidth - (margin * 2);
+    const lineHeight = fontSize * 1.4;
+    
+    // Split into lines and wrap
+    const paragraphs = text.split('\n');
+    let wrappedLines = [];
+    
+    for (const paragraph of paragraphs) {
+      if (!paragraph.trim()) {
+        wrappedLines.push('');
+        continue;
+      }
+      
+      const words = paragraph.split(' ');
+      let currentLine = '';
+      
+      for (const word of words) {
+        const testLine = currentLine ? currentLine + ' ' + word : word;
+        const width = font.widthOfTextAtSize(testLine, fontSize);
+        if (width > contentWidth && currentLine) {
+          wrappedLines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) wrappedLines.push(currentLine);
+    }
+    
+    let currentPage = pdfDoc.addPage([pdfWidth, pdfHeight]);
+    let currentY = pdfHeight - margin;
+    
+    // Draw Title Header
+    if (title) {
+      currentPage.drawText(title, {
+        x: margin,
+        y: currentY - fontSize - 4,
+        size: fontSize + 6,
+        font: fontBold,
+        color: pdfLib.rgb(0.1, 0.1, 0.2)
+      });
+      currentY -= (fontSize + 24);
+      currentPage.drawLine({
+        start: { x: margin, y: currentY },
+        end: { x: pdfWidth - margin, y: currentY },
+        thickness: 1,
+        color: pdfLib.rgb(0.8, 0.8, 0.8)
+      });
+      currentY -= 16;
+    }
+    
+    // Draw content lines
+    for (const line of wrappedLines) {
+      if (currentY - lineHeight < margin) {
+        currentPage = pdfDoc.addPage([pdfWidth, pdfHeight]);
+        currentY = pdfHeight - margin;
+      }
+      
+      if (line) {
+        currentPage.drawText(line, {
+          x: margin,
+          y: currentY - fontSize,
+          size: fontSize,
+          font: font,
+          color: pdfLib.rgb(0.15, 0.15, 0.15)
+        });
+      }
+      currentY -= lineHeight;
+    }
+    
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    download(blob, `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`);
+    toast('PDF generated and downloaded successfully!', 'success');
+  } catch (err) {
+    console.error(err);
+    toast('Error creating PDF: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⚡ Convert to PDF';
+  }
+});
+</script>
+</body>
+</html>

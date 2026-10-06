@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PDF to Word / Text - Squeeze</title>
+<meta name="description" content="Extract text and convert PDF documents to Word (.doc / .txt) format offline in your browser.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<style>
+.preview-box { background: rgba(0,0,0,0.3); border: 1px solid var(--b); border-radius: 12px; padding: 20px; max-height: 450px; overflow-y: auto; font-family: monospace; font-size: 0.95rem; white-space: pre-wrap; word-break: break-word; color: var(--fg); line-height: 1.6; }
+.stats-bar { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.stat-pill { background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 20px; font-size: 0.85rem; color: var(--mu); }
+.stat-pill strong { color: var(--fg); }
+</style>
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <div class="header-badge"><span class="badge-dot"></span><span>100% Offline</span></div>
+  </div>
+</header>
+<main class="tool-main">
+  <div class="tool-header">
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <h1>PDF to Word &amp; Text</h1>
+    <p>Extract text from any PDF document and export as editable Word (.doc) or Text file. 100% private and offline.</p>
+  </div>
+
+  <div class="drop-zone" id="drop-zone">
+    <div class="drop-icon">&#128196;</div>
+    <div class="drop-title">Select PDF Document</div>
+    <div class="drop-sub">Drag &amp; drop a PDF here or click to browse</div>
+    <input type="file" id="file-input" accept=".pdf,application/pdf" style="display:none">
+  </div>
+
+  <div class="work-area" id="work-area" style="display:none">
+    <div class="file-summary" id="file-summary"></div>
+    
+    <div class="options-panel">
+      <h3>Extraction &amp; Export Options</h3>
+      <div class="opt-grid">
+        <div class="opt-group">
+          <label>Export Format</label>
+          <select id="export-format" class="opt-select">
+            <option value="doc">Word Document (.doc)</option>
+            <option value="txt">Plain Text (.txt)</option>
+            <option value="html">HTML Webpage (.html)</option>
+          </select>
+        </div>
+        <div class="opt-group">
+          <label>Page Range</label>
+          <input type="text" id="page-range" class="opt-input" placeholder="e.g. 1-5, 8, 11-15 (Leave blank for all)">
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-pill">Pages Extracted: <strong id="stat-pages">0</strong></div>
+      <div class="stat-pill">Total Words: <strong id="stat-words">0</strong></div>
+      <div class="stat-pill">Total Characters: <strong id="stat-chars">0</strong></div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-weight:600;font-size:0.95rem">Extracted Text Preview:</span>
+      <button id="btn-copy" class="btn-sec" style="padding:4px 12px;font-size:0.85rem">&#128203; Copy Text</button>
+    </div>
+
+    <div class="preview-box" id="text-preview">Extracting text...</div>
+
+    <div class="actions-row" style="margin-top:24px">
+      <button id="btn-export" class="btn-primary">&#128190; Export Document</button>
+      <button id="btn-reset" class="btn-sec">Choose Another File</button>
+    </div>
+  </div>
+</main>
+
+<script src="_shared.js"></script>
+<script>
+let currentFile = null;
+let extractedPages = [];
+
+const dropZone = $('#drop-zone');
+const fileInput = $('#file-input');
+const workArea = $('#work-area');
+const textPreview = $('#text-preview');
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+setupDrop(dropZone, files => handleFile(files[0]), false, '.pdf');
+
+async function handleFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+    toast('Please select a valid PDF file.', 'error');
+    return;
+  }
+  currentFile = file;
+  dropZone.style.display = 'none';
+  workArea.style.display = 'block';
+  $('#file-summary').innerHTML = `<strong>${file.name}</strong> &middot; ${fmt(file.size)}`;
+  
+  await extractText();
+}
+
+async function extractText() {
+  textPreview.textContent = 'Loading PDF engine and parsing pages...';
+  extractedPages = [];
+  try {
+    const pdfjs = await getPdfJs();
+    const arrayBuffer = await currentFile.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      
+      let pageLines = [];
+      let currentY = null;
+      let lineStr = '';
+      
+      for (const item of textContent.items) {
+        const y = Math.round(item.transform[5]);
+        if (currentY !== null && Math.abs(y - currentY) > 5) {
+          if (lineStr.trim()) pageLines.push(lineStr.trim());
+          lineStr = '';
+        }
+        currentY = y;
+        lineStr += item.str + ' ';
+      }
+      if (lineStr.trim()) pageLines.push(lineStr.trim());
+      
+      extractedPages.push({ pageNum: i, lines: pageLines, text: pageLines.join('\n') });
+    }
+    
+    updateDisplay();
+  } catch (err) {
+    console.error(err);
+    textPreview.textContent = 'Error parsing PDF: ' + err.message;
+    toast('Failed to parse PDF content', 'error');
+  }
+}
+
+function parsePageRanges(rangeStr, totalPages) {
+  if (!rangeStr.trim()) return Array.from({length: totalPages}, (_, i) => i + 1);
+  const pages = new Set();
+  const parts = rangeStr.split(',');
+  for (let part of parts) {
+    part = part.trim();
+    if (part.includes('-')) {
+      const [start, end] = part.split('-').map(n => parseInt(n.trim(), 10));
+      if (!isNaN(start) && !isNaN(end)) {
+        for (let p = Math.max(1, start); p <= Math.min(totalPages, end); p++) pages.add(p);
+      }
+    } else {
+      const p = parseInt(part, 10);
+      if (!isNaN(p) && p >= 1 && p <= totalPages) pages.add(p);
+    }
+  }
+  return Array.from(pages).sort((a, b) => a - b);
+}
+
+function updateDisplay() {
+  const rangeStr = $('#page-range').value;
+  const targetPages = parsePageRanges(rangeStr, extractedPages.length);
+  
+  const selectedText = extractedPages
+    .filter(p => targetPages.includes(p.pageNum))
+    .map(p => `--- PAGE ${p.pageNum} ---\n\n${p.text}`)
+    .join('\n\n');
+
+  textPreview.textContent = selectedText || '(No text extracted from selected pages)';
+  
+  const wordCount = selectedText ? selectedText.trim().split(/\s+/).filter(Boolean).length : 0;
+  const charCount = selectedText.length;
+
+  $('#stat-pages').textContent = targetPages.length + ' / ' + extractedPages.length;
+  $('#stat-words').textContent = wordCount.toLocaleString();
+  $('#stat-chars').textContent = charCount.toLocaleString();
+}
+
+$('#page-range').addEventListener('input', updateDisplay);
+
+$('#btn-copy').addEventListener('click', () => {
+  navigator.clipboard.writeText(textPreview.textContent);
+  toast('Extracted text copied to clipboard!', 'success');
+});
+
+$('#btn-export').addEventListener('click', () => {
+  const format = $('#export-format').value;
+  const rangeStr = $('#page-range').value;
+  const targetPages = parsePageRanges(rangeStr, extractedPages.length);
+  const baseName = stem(currentFile.name);
+
+  if (format === 'txt') {
+    const textContent = extractedPages
+      .filter(p => targetPages.includes(p.pageNum))
+      .map(p => p.text)
+      .join('\n\n====================\n\n');
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+    download(blob, `${baseName}.txt`);
+    toast('Text file downloaded!', 'success');
+  } else if (format === 'doc') {
+    const htmlBody = extractedPages
+      .filter(p => targetPages.includes(p.pageNum))
+      .map(p => `<div style="page-break-after:always; margin-bottom: 2rem;">
+        <h2 style="color:#555; font-size:12pt; border-bottom:1px solid #ccc; padding-bottom:4px;">Page ${p.pageNum}</h2>
+        ${p.lines.map(l => `<p style="font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5; margin: 4px 0;">${escapeHtml(l)}</p>`).join('')}
+      </div>`).join('');
+
+    const docContent = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+    <head><title>${escapeHtml(baseName)}</title>
+    <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+    <style>body { font-family: Arial, sans-serif; }</style>
+    </head>
+    <body>${htmlBody}</body></html>`;
+
+    const blob = new Blob(['\ufeff' + docContent], { type: 'application/msword' });
+    download(blob, `${baseName}.doc`);
+    toast('Word document downloaded!', 'success');
+  } else if (format === 'html') {
+    const htmlBody = extractedPages
+      .filter(p => targetPages.includes(p.pageNum))
+      .map(p => `<section class="page" style="margin-bottom: 2em; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3>Page ${p.pageNum}</h3>
+        ${p.lines.map(l => `<p>${escapeHtml(l)}</p>`).join('')}
+      </section>`).join('');
+    
+    const htmlDoc = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(baseName)}</title></head><body style="max-width:800px;margin:40px auto;font-family:sans-serif;line-height:1.6">${htmlBody}</body></html>`;
+    const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+    download(blob, `${baseName}.html`);
+    toast('HTML file downloaded!', 'success');
+  }
+});
+
+function escapeHtml(str) {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+$('#btn-reset').addEventListener('click', () => {
+  currentFile = null;
+  extractedPages = [];
+  fileInput.value = '';
+  workArea.style.display = 'none';
+  dropZone.style.display = 'block';
+});
+</script>
+</body>
+</html>
