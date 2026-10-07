@@ -1,6 +1,6 @@
 
 // Bump V whenever any cached file changes, so installed copies update.
-const V = 'squeeze-v3';
+const V = 'squeeze-v4';
 // Every page, script, style and library, so every tool works offline after the first visit.
 const CORE = [
   "./",
@@ -9,7 +9,7 @@ const CORE = [
   "index.html",
   "manifest.webmanifest",
   "style.css",
-  "tools/_shared.js",
+  "tools/shared.js",
   "tools/compress-files.html",
   "tools/compress-images.html",
   "tools/compress-pdf.html",
