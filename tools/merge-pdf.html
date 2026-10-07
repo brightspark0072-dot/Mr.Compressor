@@ -7,8 +7,6 @@
 <meta name="description" content="Combine multiple PDFs into one offline.">
 <meta name="theme-color" content="#080c1e">
 <link rel="icon" type="image/png" href="../icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../style.css">
 <style>
 .file-item { cursor: grab; user-select: none; }
@@ -100,10 +98,9 @@
 
   window.removeFile = (i) => { files.splice(i, 1); render(); };
 
-  fileIn.addEventListener('change', () => addFiles([...fileIn.files]));
+  fileIn.addEventListener('change', () => { addFiles([...fileIn.files]); fileIn.value = ''; });
   setupDrop(drop, fs => addFiles(fs), true);
   $('#add-more').addEventListener('click', () => fileIn.click());
-  fileIn.addEventListener('change', () => addFiles([...fileIn.files]));
 
   runBtn.addEventListener('click', async () => {
     if (files.length < 2) { toast('Add at least 2 PDFs to merge', 'error'); return; }

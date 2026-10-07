@@ -7,8 +7,6 @@
 <meta name="description" content="Add page numbers to PDF offline.">
 <meta name="theme-color" content="#080c1e">
 <link rel="icon" type="image/png" href="../icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../style.css">
 </head>
 <body class="tool-page">
@@ -109,7 +107,7 @@
       const startNum = parseInt($('#start-num').value) || 1;
       const skipFirst = $('#skip-first').checked;
       const pos = document.querySelector('input[name=pos]:checked').value;
-      const fmt = document.querySelector('input[name=fmt]:checked').value;
+      const numFmt = document.querySelector('input[name=fmt]:checked').value;
       const total = pdfDoc.getPageCount();
       const pages = pdfDoc.getPages();
       const margin = 24;
@@ -119,8 +117,8 @@
         const { width, height } = page.getSize();
         const num = startNum + (skipFirst ? i - 1 : i);
         let text = String(num);
-        if (fmt === 'n-of-N') text = num + ' of ' + (skipFirst ? total - 1 : total);
-        if (fmt === 'Page-n') text = 'Page ' + num;
+        if (numFmt === 'n-of-N') text = num + ' of ' + (skipFirst ? total - 1 : total);
+        if (numFmt === 'Page-n') text = 'Page ' + num;
         const tw = font.widthOfTextAtSize(text, sz);
         let x = margin, y = margin;
         if (pos.includes('center')) x = (width - tw) / 2;

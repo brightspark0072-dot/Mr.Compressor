@@ -7,8 +7,6 @@
 <meta name="description" content="Export PDF pages as images offline.">
 <meta name="theme-color" content="#080c1e">
 <link rel="icon" type="image/png" href="../icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../style.css">
 </head>
 <body class="tool-page">
@@ -116,8 +114,8 @@
 
   $('#run-btn').addEventListener('click', async () => {
     if (!pdfJsDoc) return;
-    const fmt = document.querySelector('input[name=fmt]:checked').value;
-    const ext = fmt === 'image/jpeg' ? 'jpg' : fmt === 'image/png' ? 'png' : 'webp';
+    const mime = document.querySelector('input[name=fmt]:checked').value;
+    const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/png' ? 'png' : 'webp';
     const q = parseInt(quality.value) / 100;
     const sc = parseFloat(scale.value);
     $('#run-btn').disabled = true; $('#run-btn').innerHTML = '<span class="spinner"></span> Converting...';
@@ -126,7 +124,7 @@
       const zip = new JSZip();
       for (let i = 1; i <= totalPages; i++) {
         const canvas = await renderPage(pdfJsDoc, i, sc);
-        const blob = await new Promise(r => canvas.toBlob(r, fmt, q));
+        const blob = await new Promise(r => canvas.toBlob(r, mime, q));
         const ab = await blob.arrayBuffer();
         zip.file('page_' + String(i).padStart(3,'0') + '.' + ext, ab);
       }

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Organize PDF - Squeeze</title>
+<meta name="description" content="Rotate, reorder and delete PDF pages offline.">
+<meta name="theme-color" content="#080c1e">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="stylesheet" href="../style.css">
+<style>
+.page-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px; margin-top:16px; }
+.pg { border:2px solid var(--gb); border-radius:12px; position:relative; background:rgba(255,255,255,0.04); display:flex; flex-direction:column; align-items:center; padding:8px 4px 6px; gap:4px; cursor:grab; transition:opacity .15s, border-color .15s; }
+.pg:hover { border-color:var(--ac); }
+.pg.del { opacity:.3; }
+.pg.over { border-color:var(--ac2); }
+.pg-img { width:104px; height:104px; display:grid; place-items:center; overflow:hidden; color:var(--mu); font-size:.7rem; }
+.pg-img canvas { background:#fff; border-radius:3px; box-shadow:0 2px 8px rgba(0,0,0,.4); transition:transform .2s; }
+.pg-num { font-size:.72rem; font-weight:700; color:var(--mu); }
+.pg-btns { display:flex; gap:2px; }
+.pg-btns button { background:none; border:none; cursor:pointer; color:var(--mu); font-size:1rem; padding:3px 6px; border-radius:6px; }
+.pg-btns button:hover:not(:disabled) { color:var(--ac); background:rgba(125,211,252,.1); }
+.pg-btns button:disabled { opacity:.3; cursor:not-allowed; }
+</style>
+</head>
+<body class="tool-page">
+<header class="site-header">
+  <div class="header-inner">
+    <a href="../index.html" class="logo"><span class="logo-icon">&#10216;S&#10217;</span><span class="logo-text">Squeeze</span></a>
+    <p class="tagline">100% Offline &middot; Nothing Uploaded</p>
+    <div class="header-badge"><span class="badge-dot"></span><span>Local Processing</span></div>
+  </div>
+</header>
+<div class="tool-page-header">
+  <div>
+    <a href="../index.html" class="back-link">&#8592; All Tools</a>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <div class="tool-page-icon" style="background:linear-gradient(135deg,#10b981,#06b6d4)">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="32" height="32"><path d="M21.5 2v6h-6"/><path d="M2.5 12A10 10 0 0 1 19.5 5.3L21.5 8"/><path d="M2.5 22v-6h6"/><path d="M21.5 12A10 10 0 0 1 4.5 18.7L2.5 16"/></svg>
+      </div>
+      <div class="tool-page-title"><h1>Organize PDF</h1><p>Rotate, reorder or delete pages, then save</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:900px;margin:0 auto 20px">
+  <div class="drop-zone" id="drop">
+    <input type="file" id="file-in" accept=".pdf,application/pdf">
+    <span class="drop-icon">&#128196;</span>
+    <p class="drop-text">Drop your PDF here</p>
+    <p class="drop-hint">Then drag pages to reorder, rotate or delete them</p>
+  </div>
+  <div id="ctrl-bar" hidden style="gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center">
+    <button class="btn-secondary" id="rot-all">&#8635; Rotate all +90&#176;</button>
+    <span id="count" style="color:var(--mu);font-size:.9rem"></span>
+  </div>
+  <div class="page-grid" id="page-grid"></div>
+  <div class="action-row" id="action-row" hidden>
+    <button class="btn-primary" id="save-btn">&#9889; Save PDF</button>
+    <button class="btn-secondary" id="reset-btn">&#128472; Reset</button>
+  </div>
+  <div class="result-summary" id="summary" hidden></div>
+</div>
+
+<script src="_shared.js"></script>
+<script>
+(async () => {
+  const fileIn = $('#file-in'), drop = $('#drop'), grid = $('#page-grid');
+  const actionRow = $('#action-row'), summary = $('#summary'), ctrlBar = $('#ctrl-bar');
+  let srcBytes = null, name = 'document', jsTask = null, token = 0, pages = [];
+  const S = 104;
+
+  function layout(p) {
+    const c = p.canvas; if (!c) return;
+    const odd = p.rot % 180 !== 0, a = odd ? c.height / c.width : c.width / c.height;
+    const vw = a >= 1 ? S : S * a, vh = a >= 1 ? S / a : S;
+    c.style.width = (odd ? vh : vw) + 'px'; c.style.height = (odd ? vw : vh) + 'px';
+    c.style.transform = 'rotate(' + p.rot + 'deg)';
+  }
+  function count() {
+    const k = pages.filter(p => !p.del).length;
+    $('#count').textContent = k + ' of ' + pages.length + ' pages kept';
+    $('#save-btn').disabled = k === 0;
+  }
+  function move(i, j) {
+    if (j < 0 || j >= pages.length || i === j) return;
+    const [x] = pages.splice(i, 1); pages.splice(j, 0, x); paint();
+  }
+  function btn(txt, title, fn, dis) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = txt; b.title = title; b.setAttribute('aria-label', title); b.disabled = !!dis; b.onclick = fn; return b;
+  }
+  function card(p, i) {
+    const el = document.createElement('div');
+    el.className = 'pg' + (p.del ? ' del' : ''); el.draggable = true;
+    const img = document.createElement('div'); img.className = 'pg-img';
+    if (p.canvas) { img.append(p.canvas); layout(p); } else img.textContent = 'Loading…';
+    p.box = img;
+    const num = document.createElement('div'); num.className = 'pg-num'; num.textContent = 'Page ' + (p.idx + 1);
+    const b1 = document.createElement('div'); b1.className = 'pg-btns';
+    b1.append(btn('\u21BA', 'Rotate left', () => { p.rot = (p.rot + 270) % 360; layout(p); }),
+              btn('\u21BB', 'Rotate right', () => { p.rot = (p.rot + 90) % 360; layout(p); }),
+              btn(p.del ? '\u21A9' : '\u2715', p.del ? 'Restore page' : 'Delete page', () => { p.del = !p.del; paint(); }));
+    const b2 = document.createElement('div'); b2.className = 'pg-btns';
+    b2.append(btn('\u2190', 'Move earlier', () => move(i, i - 1), i === 0), btn('\u2192', 'Move later', () => move(i, i + 1), i === pages.length - 1));
+    el.append(img, num, b1, b2);
+    el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/x-squeeze-pg', String(i)); e.dataTransfer.effectAllowed = 'move'; });
+    el.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('text/x-squeeze-pg')) { e.preventDefault(); el.classList.add('over'); } });
+    el.addEventListener('dragleave', () => el.classList.remove('over'));
+    el.addEventListener('drop', e => {
+      el.classList.remove('over');
+      const f = e.dataTransfer.getData('text/x-squeeze-pg'); if (f === '') return;
+      e.preventDefault(); e.stopPropagation(); move(+f, i);
+    });
+    return el;
+  }
+  function paint() { grid.textContent = ''; pages.forEach((p, i) => grid.append(card(p, i))); count(); }
+
+  async function thumbs(t, doc, n) {
+    try {
+      for (let k = 1; k <= n; k++) {
+        if (t !== token) return;
+        const p = pages.find(x => x.idx === k - 1);
+        p.canvas = await renderPage(doc, k, 0.35);
+        if (t !== token) return;
+        if (p.box && p.box.isConnected) { p.box.textContent = ''; p.box.append(p.canvas); layout(p); }
+        if (k % 4 === 0) await new Promise(r => setTimeout(r));
+      }
+    } catch (e) { if (t === token) toast('Previews unavailable, but you can still reorder and save.', 'info'); }
+  }
+
+  async function loadPdf(file) {
+    if (!file.name.toLowerCase().endsWith('.pdf')) { toast('Please select a PDF', 'error'); return; }
+    toast('Loading...', 'info');
+    try {
+      srcBytes = new Uint8Array(await file.arrayBuffer()); name = stem(file.name);
+      const { PDFDocument } = await getPdfLib();
+      let n;
+      try { n = (await PDFDocument.load(srcBytes)).getPageCount(); }
+      catch (e) { throw new Error(/encrypt/i.test(e.message) ? 'This PDF is password-protected.' : 'Could not read this PDF. It may be damaged.'); }
+      const t = ++token;
+      pages = Array.from({ length: n }, (_, i) => ({ idx: i, rot: 0, del: false, canvas: null, box: null }));
+      summary.hidden = true; paint();
+      ctrlBar.hidden = false; ctrlBar.style.display = 'flex'; actionRow.hidden = false;
+      const lib = await getPdfJs();
+      if (jsTask) jsTask.destroy();
+      jsTask = lib.getDocument({ data: srcBytes.slice() });
+      const doc = await jsTask.promise;
+      thumbs(t, doc, n);
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  }
+
+  $('#rot-all').addEventListener('click', () => { pages.forEach(p => { p.rot = (p.rot + 90) % 360; layout(p); }); });
+
+  $('#save-btn').addEventListener('click', async () => {
+    try {
+      const { PDFDocument, degrees } = await getPdfLib();
+      const src = await PDFDocument.load(srcBytes), out = await PDFDocument.create();
+      const keep = pages.filter(p => !p.del), copied = await out.copyPages(src, keep.map(p => p.idx));
+      copied.forEach((pg, i) => { pg.setRotation(degrees((pg.getRotation().angle + keep[i].rot) % 360)); out.addPage(pg); });
+      const blob = new Blob([await out.save()], { type: 'application/pdf' });
+      summary.hidden = false;
+      summary.innerHTML = '<strong>PDF ready &mdash; ' + keep.length + ' pages, ' + fmt(blob.size) + '</strong><br><div class="action-row"><button class="btn-primary" id="dl-btn">&#8659; Download PDF</button></div>';
+      $('#dl-btn').addEventListener('click', () => download(blob, name + '-organized.pdf'));
+      toast('PDF ready!', 'success');
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  });
+
+  fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadPdf(fileIn.files[0]); });
+  setupDrop(drop, files => loadPdf(files[0]));
+  $('#reset-btn').addEventListener('click', () => {
+    token++; if (jsTask) { jsTask.destroy(); jsTask = null; }
+    srcBytes = null; pages = []; grid.textContent = ''; ctrlBar.hidden = true; actionRow.hidden = true; summary.hidden = true; fileIn.value = '';
+  });
+})();
+</script>
+</body>
+</html>

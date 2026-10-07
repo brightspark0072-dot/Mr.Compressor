@@ -1,6 +1,36 @@
 
-const V = 'squeeze-v2';
-const CORE = ['./', 'app.js', 'zip.js', 'gs-worker.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+// Bump V whenever any cached file changes, so installed copies update.
+const V = 'squeeze-v3';
+// Every page, script, style and library, so every tool works offline after the first visit.
+const CORE = [
+  "./",
+  "icon-192.png",
+  "icon-512.png",
+  "index.html",
+  "manifest.webmanifest",
+  "style.css",
+  "tools/_shared.js",
+  "tools/compress-files.html",
+  "tools/compress-images.html",
+  "tools/compress-pdf.html",
+  "tools/convert-images.html",
+  "tools/images-to-pdf.html",
+  "tools/merge-pdf.html",
+  "tools/office-to-pdf.html",
+  "tools/organize-pdf.html",
+  "tools/pdf-metadata.html",
+  "tools/pdf-page-numbers.html",
+  "tools/pdf-to-images.html",
+  "tools/pdf-to-word.html",
+  "tools/resize-images.html",
+  "tools/rotate-pdf.html",
+  "tools/split-pdf.html",
+  "tools/watermark-pdf.html",
+  "vendor/jszip.min.js",
+  "vendor/pdf-lib.min.js",
+  "vendor/pdf.min.mjs",
+  "vendor/pdf.worker.min.mjs"
+];
 const OPTIONAL = ['vendor/gs.mjs', 'vendor/gs.wasm']; // cached at install if you vendored them
 
 self.addEventListener('install', e => {
@@ -37,6 +67,8 @@ self.addEventListener('fetch', e => {
       .then(res => { if (res.status === 200) c.put(key, res.clone()).catch(() => { }); return res; })
       .catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
-    return (await net) || Response.error();
+    const res = await net;
+    if (res) return res;
+    return (r.mode === 'navigate' && await c.match('./')) || Response.error();
   })());
 });
