@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Squeeze - file compressor</title>
-<meta name="description" content="Compress images, PDFs and Office files offline. Nothing leaves your device.">
+<title>Squeeze - offline PDF & file tools</title>
+<meta name="description" content="Merge, split, organize, convert and compress PDFs and images offline. Nothing leaves your device.">
 <meta name="theme-color" content="#0a0e1f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,86 +13,19 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<style>
-:root{color-scheme:dark;--tx:#eef2ff;--mu:#a9b4d6;--ac:#7dd3fc;--ac2:#a78bfa;--gl:rgba(255,255,255,.07);--gb:rgba(255,255,255,.16)}
-*{box-sizing:border-box;margin:0}
-[hidden]{display:none!important}
-html{background:#0a0e1f}
-body{min-height:100vh;min-height:100dvh;font:16px/1.5 ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tx);padding:max(22px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
-body::before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradient(45% 35% at 12% 8%,rgba(59,130,246,.55),transparent 70%),radial-gradient(40% 35% at 92% 28%,rgba(168,85,247,.45),transparent 70%),radial-gradient(55% 40% at 45% 100%,rgba(6,182,212,.4),transparent 70%),#0a0e1f}
-main{max-width:640px;margin:0 auto;display:grid;gap:14px}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
-h1{font-size:2rem;font-weight:700;letter-spacing:-.03em;line-height:1.1}
-header p{color:var(--mu);font-size:.9rem}
-.glass{background:var(--gl);border:1px solid var(--gb);border-radius:22px;-webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);box-shadow:0 8px 32px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.12)}
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:rgba(28,34,64,.9)}}
-.btn{display:inline-block;padding:9px 16px;border-radius:999px;border:1px solid var(--gb);background:rgba(255,255,255,.1);color:var(--tx);font:inherit;font-size:.9rem;font-weight:600;text-decoration:none;cursor:pointer;white-space:nowrap}
-.btn:hover{background:rgba(255,255,255,.18)}
-:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-.drop{position:relative;display:grid;gap:4px;place-items:center;text-align:center;padding:40px 20px;border-style:dashed;cursor:pointer;transition:background .2s,border-color .2s}
-.drop>*{pointer-events:none}
-.drop b{font-size:1.15rem}
-.drop span{color:var(--mu);font-size:.9rem}
-.drop input{position:absolute;opacity:0;width:1px;height:1px}
-.drop:hover,.drop.on{border-color:var(--ac);background:rgba(125,211,252,.1)}
-.drop:focus-within{outline:2px solid var(--ac);outline-offset:3px}
-.ctl{display:grid;gap:16px;padding:18px}
-.f{display:grid;gap:8px}
-.f>label,.f>span{color:var(--mu);font-size:.9rem}
-input[type=range]{width:100%;accent-color:var(--ac)}
-select{width:100%;padding:11px 12px;border-radius:14px;border:1px solid var(--gb);background:rgba(255,255,255,.08);color:var(--tx);font:inherit}
-option{background:#161b33;color:var(--tx)}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border:1px solid var(--gb);border-radius:14px;background:rgba(255,255,255,.05)}
-.seg label{position:relative;display:block}
-.seg input{position:absolute;opacity:0;width:1px;height:1px}
-.seg span{display:block;text-align:center;padding:8px;border-radius:10px;cursor:pointer;font-weight:600;color:var(--mu)}
-.seg input:checked+span{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#0a0e1f}
-.seg input:focus-visible+span{outline:2px solid #fff}
-.seg input:disabled+span{opacity:.4;cursor:not-allowed}
-.sum{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;font-size:.9rem}
-#note{color:#fda4af;font-size:.85rem;text-align:center}
-#note:empty{display:none}
-ul{list-style:none;padding:0;display:grid;gap:10px}
-.row{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border-radius:18px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
-.th{width:52px;height:52px;border-radius:12px;background:rgba(255,255,255,.08) center/cover no-repeat}
-.th{display:grid;place-items:center;font-size:.7rem;font-weight:700;color:var(--mu)}
-.tx{min-width:0}
-.nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mt{color:var(--mu);font-size:.82rem}
-.row[data-s=busy] .th,.row[data-s=wait] .th{animation:p 1.1s ease-in-out infinite}
-.row[data-s=err] .mt{color:#fda4af}
-@keyframes p{50%{opacity:.4}}
-#ios{color:var(--mu);font-size:.82rem;text-align:center}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main>
+<main class="wide">
 <header>
-<div><h1>Squeeze</h1><p>Compress images, PDFs and Office files on your device. Works offline.</p></div>
+<div><h1 id="title">Squeeze</h1><p id="sub">PDF and file tools that work offline. Your files never leave your device.</p></div>
 <button id="ins" class="btn" type="button" hidden>Install</button>
 </header>
-<label class="glass drop" id="drop">
-<input id="file" type="file" accept="image/*,application/pdf,.pdf,.docx,.xlsx,.pptx" multiple>
-<b>Drop files here</b><span>or tap to choose. Images, PDF, DOCX, XLSX, PPTX.</span>
-</label>
-<section class="glass ctl" aria-label="Settings">
-<div class="f"><label for="q">Image quality <output id="qv">75</output>%</label><input id="q" type="range" min="10" max="100" value="75"></div>
-<div class="f"><label for="m">Longest side</label>
-<select id="m"><option value="4096">4096 px</option><option value="2560" selected>2560 px</option><option value="1920">1920 px</option><option value="1280">1280 px</option><option value="800">800 px</option></select></div>
-<div class="f"><span id="fl">Format</span>
-<div class="seg" role="radiogroup" aria-labelledby="fl">
-<label><input type="radio" name="f" value="image/jpeg" checked><span>JPEG</span></label>
-<label><input type="radio" name="f" value="image/webp"><span>WebP</span></label>
-</div></div>
-<div class="f"><label for="p">PDF quality</label><select id="p"><option value="screen">Smallest (72 dpi)</option><option value="ebook" selected>Balanced (150 dpi)</option><option value="printer">High (300 dpi)</option></select></div>
-</section>
-<section class="glass sum" id="sum" hidden><span id="st" aria-live="polite"></span><button id="clr" class="btn" type="button">Clear all</button></section>
-<p id="note" role="status"></p>
-<ul id="list"></ul>
-<p id="ios" hidden>To install, tap Share, then Add to Home Screen.</p>
+<div id="view"></div>
+<p id="ios" hidden style="color:var(--mu);font-size:.82rem;text-align:center">To install, tap Share, then Add to Home Screen.</p>
 </main>
 <script src="zip.js"></script>
-<script src="app.js"></script>
+<script src="hub.js"></script>
+<script src="tools.js"></script>
 </body>
 </html>
