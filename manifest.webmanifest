@@ -1,8 +1,8 @@
 {
   "id": "squeeze-pwa",
-  "name": "Squeeze - File Compressor",
+  "name": "Squeeze - Offline PDF & File Tools",
   "short_name": "Squeeze",
-  "description": "Compress images, PDFs and Office files offline. Nothing leaves your device.",
+  "description": "Merge, split, organize, convert and compress PDFs and images offline. Nothing leaves your device.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

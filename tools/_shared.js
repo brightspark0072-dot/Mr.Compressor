@@ -1,4 +1,4 @@
-﻿// ===== SHARED UTILITIES FOR ALL TOOL PAGES =====
+// ===== SHARED UTILITIES FOR ALL TOOL PAGES =====
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
@@ -58,50 +58,41 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// ===== LOAD PDF.JS =====
+// ===== SELF-HOSTED LIBRARIES (in /vendor, cached by the service worker, so they work offline) =====
+const VENDOR = new URL('../vendor/', document.currentScript.src).href;
+function loadScript(src, ready) {
+  return new Promise((ok, fail) => {
+    if (ready()) return ok();
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok;
+    s.onerror = () => fail(new Error('Could not load a required library. Open this app once while online so it can be saved for offline use.'));
+    document.head.appendChild(s);
+  });
+}
+
 let _pdfjs = null;
 async function getPdfJs() {
   if (_pdfjs) return _pdfjs;
-  if (window.pdfjsLib) { _pdfjs = window.pdfjsLib; return _pdfjs; }
-  await new Promise((ok, fail) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-    s.onload = ok; s.onerror = fail;
-    document.head.appendChild(s);
-  });
-  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  _pdfjs = window.pdfjsLib;
+  try {
+    const m = await import(VENDOR + 'pdf.min.mjs');
+    m.GlobalWorkerOptions.workerSrc = VENDOR + 'pdf.worker.min.mjs';
+    _pdfjs = m;
+  } catch (e) { throw new Error('Could not load the PDF viewer library. Open this app once while online so it can be saved for offline use.'); }
   return _pdfjs;
 }
 
-// ===== LOAD PDF-LIB =====
 let _pdfLib = null;
 async function getPdfLib() {
   if (_pdfLib) return _pdfLib;
-  if (window.PDFLib) { _pdfLib = window.PDFLib; return _pdfLib; }
-  await new Promise((ok, fail) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
-    s.onload = ok; s.onerror = fail;
-    document.head.appendChild(s);
-  });
-  _pdfLib = window.PDFLib;
-  return _pdfLib;
+  await loadScript(VENDOR + 'pdf-lib.min.js', () => window.PDFLib);
+  return (_pdfLib = window.PDFLib);
 }
 
-// ===== LOAD JSZip =====
 let _jszip = null;
 async function getJsZip() {
   if (_jszip) return _jszip;
-  if (window.JSZip) { _jszip = window.JSZip; return _jszip; }
-  await new Promise((ok, fail) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-    s.onload = ok; s.onerror = fail;
-    document.head.appendChild(s);
-  });
-  _jszip = window.JSZip;
-  return _jszip;
+  await loadScript(VENDOR + 'jszip.min.js', () => window.JSZip);
+  return (_jszip = window.JSZip);
 }
 
 // ===== RENDER PDF PAGE TO CANVAS =====
@@ -111,7 +102,7 @@ async function renderPage(pdfDoc, pageNum, scale = 1.5) {
   const canvas = document.createElement('canvas');
   canvas.width = vp.width; canvas.height = vp.height;
   const ctx = canvas.getContext('2d');
-  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  await page.render({ canvas, canvasContext: ctx, viewport: vp, background: 'rgb(255,255,255)' }).promise;
   return canvas;
 }
 
